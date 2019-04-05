@@ -1,0 +1,23 @@
+name: ReportPlus
+version: 6.7
+main: me.xbones.reportplus.spigot.ReportPlus
+description: Easily report to Staff and your discord!
+author: xBones
+depend: [Vault]
+commands:
+    report:
+        description: Report players to staff in the server!
+        usage: /report <Message>
+    txtcmd:
+        description: Add a command to the discord bot that says the text you specify!
+        usage: /txtcmd <Command> <Text>
+    cmdcmd:
+        description: Add a command to the discord bot that says the text you specify!
+        usage: /cmdcmd <Command> <Command to be executed>
+    reports:
+        description: View recent updates!
+        usage: /reports
+    reportplus:
+        description: View version of the ReportPlus plugin!
+        usage: /reportplus
+        aliases: [rp]

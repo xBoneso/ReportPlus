@@ -1,0 +1,5 @@
+name: ReportPlus
+version: 6.7
+main: me.xbones.reportplus.bungee.ReportPlus
+description: Easily report to Staff and your discord!
+author: xBones
