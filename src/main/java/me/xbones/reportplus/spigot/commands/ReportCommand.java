@@ -1,6 +1,7 @@
 package me.xbones.reportplus.spigot.commands;
 
 
+import com.github.fernthedev.fernapi.universal.UUIDFetcher;
 import me.xbones.reportplus.spigot.ReportPlus;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -24,8 +25,8 @@ public class ReportCommand implements CommandExecutor {
 		if (sender instanceof Player) {
 			Player p = (Player) sender;
 			if (main.getConfig().getBoolean("Enabled-Modules.Reporting")) {
-				if (p.hasPermission("reportplus.use") || p.isOp()
-						&& main.getConfig().getBoolean("Allow-No-Permission-to-open-GUI") ) {
+				if ((p.hasPermission("reportplus.use") || p.isOp())
+						|| main.getConfig().getBoolean("Allow-No-Permission-to-open-GUI") ) {
 
 					// COOLDOWN //
 					int cooldownTime = main.getConfig().getInt("Command-cooldown"); // Get number of seconds from wherever you want

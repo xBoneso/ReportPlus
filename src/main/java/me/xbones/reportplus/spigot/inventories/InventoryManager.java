@@ -1,6 +1,6 @@
 package me.xbones.reportplus.spigot.inventories;
 
-import me.xbones.reportplus.spigot.Report;
+import me.xbones.reportplus.core.Report;
 import me.xbones.reportplus.spigot.ReportPlus;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;

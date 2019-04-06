@@ -30,7 +30,7 @@ public class PlayerCommandListener implements Listener {
                         ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cPlease type in a message!"));
                 e.setCancelled(true);
             }
-            main.getBot().getTextChannelById(main.getCMDChannelID()).get().sendMessage(e.getPlayer().getName() + " -> " + e.getMessage());
+            main.getCore().getJda().getTextChannelById(main.getCMDChannelID()).sendMessage(e.getPlayer().getName() + " -> " + e.getMessage()).queue();
 
         }
 

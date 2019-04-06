@@ -22,7 +22,8 @@ public class ListReportsCMD implements CommandExecutor {
     				p.openInventory(main.getInventoryManager().getReportsList());
     		}
     	} else {
-    		sender.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cYou don't have access to that command!"));
+			sender.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+					main.getPrefix() + " " + main.getUtils().getMessagesConfig().getString("No-Permission")));
     	}
 		return true;
     }

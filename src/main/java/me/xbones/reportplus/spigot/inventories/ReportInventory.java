@@ -27,7 +27,7 @@ public class ReportInventory {
         createDisplay(glassMaterial, myInventory, 16, ChatColor.RED + "REPORT!", ChatColor.DARK_RED + "REPORT ANYTHING!", durability);
         createDisplay(glassMaterial, myInventory, 18, ChatColor.RED + "REPORT!", ChatColor.DARK_RED + "REPORT ANYTHING!", durability);
         if(!p.hasPermission("reportplus.listreports" )) {
-            createDisplay(Material.BOOK, myInventory, 22, ChatColor.RED + "List Reports!", ChatColor.translateAlternateColorCodes('&', "&cYou do not have permission to use this"), durability);
+            createDisplay(Material.BOOK, myInventory, 22, ChatColor.RED + "List Reports!", ChatColor.translateAlternateColorCodes('&', "&cYou do not have permission to use this"));
         } else {
             createDisplay(Material.BOOK, myInventory, 22, ChatColor.RED + "List Reports!", ChatColor.GREEN + "View the current open reports!");
         }

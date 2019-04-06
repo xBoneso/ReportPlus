@@ -17,7 +17,7 @@ public class PlayerDeathListener implements Listener {
     public void onPlayerDeath(PlayerDeathEvent event) {
         if(main.getConfig().getBoolean("Enabled-Modules.Death-log.Enabled")){
             String id= main.getConfig().getString("Enabled-Modules.Death-log.Channel-ID");
-            main.getBot().getTextChannelById(id).get().sendMessage(event.getDeathMessage());
+            main.getCore().getJda().getTextChannelById(id).sendMessage(event.getDeathMessage()).queue();
         }
     }
 

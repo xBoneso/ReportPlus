@@ -18,8 +18,8 @@ public class PlayerLeaveListener implements Listener {
     public void onPlayerLeave(PlayerQuitEvent e) {
         Player p = e.getPlayer();
         if(main.getConfig().getBoolean("Enabled-Modules.Log-leave-and-join")) {
-            main.getBot().getTextChannelById(main.getMCChannelID()).get()
-                    .sendMessage(main.getUtils().getMessagesConfig().getString("Discord-Leave-Message").replace("%player%", p.getName()));
+            main.getCore().getJda().getTextChannelById(main.getMCChannelID())
+                    .sendMessage(main.getUtils().getMessagesConfig().getString("Discord-Leave-Message").replace("%player%", p.getName())).queue();
         }
     }
 }

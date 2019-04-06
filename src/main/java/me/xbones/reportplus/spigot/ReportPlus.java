@@ -1,139 +1,122 @@
 package me.xbones.reportplus.spigot;
-import me.xbones.reportplus.DataMessageType;
+
+import com.connorlinfoot.titleapi.TitleAPI;
+import com.github.fernthedev.fernapi.server.spigot.FernSpigotAPI;
+import me.xbones.reportplus.api.ReportPlusAPI;
+import me.xbones.reportplus.core.*;
+import me.xbones.reportplus.core.MySQL.MySQLManager;
+import me.xbones.reportplus.core.commands.CustomCMD;
+import me.xbones.reportplus.core.commands.CustomTXTCMD;
+import me.xbones.reportplus.core.commands.*;
+import me.xbones.reportplus.core.configuration.ConfigurationManager;
 import me.xbones.reportplus.spigot.Bstats.Metrics;
-import me.xbones.reportplus.spigot.MySQL.MySQLManager;
-import me.xbones.reportplus.spigot.api.ReportPlusAPI;
 import me.xbones.reportplus.spigot.commands.*;
-import me.xbones.reportplus.spigot.discord.*;
-import me.xbones.reportplus.spigot.events.PlayerReportEvent;
 import me.xbones.reportplus.spigot.inventories.InventoryManager;
 import me.xbones.reportplus.spigot.listeners.*;
-import me.xbones.reportplus.spigot.punishments.Punishment;
-import me.xbones.reportplus.spigot.punishments.PunishmentType;
-import me.xbones.reportplus.spigot.utils.Utils;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.dv8tion.jda.core.EmbedBuilder;
+import net.dv8tion.jda.core.JDA;
+import net.dv8tion.jda.core.entities.Game;
+import net.md_5.bungee.api.ChatColor;
 import net.milkbowl.vault.chat.Chat;
+import net.milkbowl.vault.permission.Permission;
 import org.apache.logging.log4j.LogManager;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredServiceProvider;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.inventivetalent.title.TitleAPI;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.DiscordApiBuilder;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
-import java.awt.*;
-import java.io.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
+
 import java.util.*;
-import java.util.logging.Level;
+import java.util.List;
 
 
-public class ReportPlus extends JavaPlugin implements PluginMessageListener{
+public class ReportPlus extends FernSpigotAPI implements IReportPlus {
+
+    // VARIABLES //
+    private ConsoleCommandSender console;
+    private Core core;
+    private String TOKEN;
+    private String cmdPrefix;
+    private String reportChannelID, CMDChannelID, MCChannelID;
 
     private Set<String> minecraftChosen = new HashSet<>();
     private Set<String> discordChosen = new HashSet<>();
     private Set<String> bothChosen = new HashSet<>();
     private Set<String> sendingMessage = new HashSet<>();
     private Map<Player, Player> reporting = new HashMap<>();
-    private ReportPlus main;
-    private DiscordApi bot;
-  // private org.javacord.api.DiscordApi reportPlusBot;
-    private String ChannelID;
     private String prefix;
-    private String CMDChannelID;
-    private String MCChannelID;
+    private MySQLManager sqlManager;
+    private List<Report> reportsList;
+    private SpigotUtils utils;
+    private List<String> messagesList;
+    private String lastMessage = "";
+    private ReportPlus main;
     private InventoryManager iManager;
-    private String lastMessage;
-    private String TOKEN;
-    private List<String> messagesList = new ArrayList<>();
-    private List<Report> reportsList = new ArrayList<>();
+    private Map<String,Report> selectedReports;
+    private InventoryClickListener inventoryClickListener;
+
     private Chat chat = null;
     private net.milkbowl.vault.permission.Permission permission = null;
-    private Utils utils;
-    private static ReportPlusAPI api;
-    private static final org.apache.logging.log4j.core.Logger logger = (org.apache.logging.log4j.core.Logger) LogManager.getRootLogger();
-    private InventoryClickListener inventoryClickListener;
-    private String cmdPrefix;
-    private MySQLManager sqlManager;
-    private Map<String, Report> selectedReports;
+    // VARIABLES //
 
     @Override
     public void onEnable() {
+        super.onEnable();
+        core = new Core();
+        console = Bukkit.getConsoleSender();
+        main = this;
         new Metrics(this);
-
-        this.getServer().getMessenger().registerOutgoingPluginChannel(this, "reportplus:rs");
-        this.getServer().getMessenger().registerIncomingPluginChannel(this, "reportplus:rs", this);
-        this.main = this;
-
-        /*  
-        if (!Bukkit.getPluginManager().isPluginEnabled("Discord-ProgramBot-API")) {
-
-            getLogger().severe("*** Discord Bot API is not installed or not enabled. ***");
-            getLogger().severe("*** Plugin cannot run. ***");
-            Bukkit.getPluginManager().disablePlugin(this);
-
-        } else {re
-            getLogger().log(Level.INFO, "*** Discord Bot API found!***");
-        }
-
-        */
-
-        if (!Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
-            getLogger().severe("*** TitleAPI is not installed or not enabled. ***");
-            getLogger().severe("*** Titles will not work. ***");
-        } else {
-            getLogger().log(Level.INFO, "*** TitlesAPI found! Titles working! ***");
-        }
-
-
+        new ConfigurationManager(false);
+        ConfigurationManager.SetConfig(getConfig());
 
         this.getConfig().options().copyDefaults(true);
         saveDefaultConfig();
 
+        console.sendMessage(Utils.CCT("&c--- &6REPORTPLUS &c---"));
+        console.sendMessage(Utils.CCT("&c     &7LOADING...     "));
 
+        checkDependencies();
 
         initializeVariables();
 
-        if(getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
-        {
-           reportsList = sqlManager.getReports();
+        try {
+            core.initializeBot(this, TOKEN, cmdPrefix);
+        }catch(Exception ex){
+            console.sendMessage(Utils.CCT("&c ERROR INITIALIZING BOT  "));
+            ex.printStackTrace();
         }
-        else
-            utils.createReportsYML();
-        utils.createMessagesYML();
+
         try{
-            bot = new DiscordApiBuilder().setToken(TOKEN).login().join();
+            sqlManager = new MySQLManager(core);
 
-                if (main.getConfig().getBoolean("Change-Game")) {
-                    bot.updateActivity(main.getConfig().getString("Game").replace("%players%",  String.valueOf(Bukkit.getOnlinePlayers().size())));
-                    if(main.getConfig().getBoolean("Auto-Refresh-Game")){
-                        getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
-                            @Override
-                            public void run() {
-                                bot.updateActivity(main.getConfig().getString("Game").replace("%players%",  String.valueOf(Bukkit.getOnlinePlayers().size())));
-                            }
-                        }, 1L, 10 * 20);
-                    }
-                }
-            bot.addMessageCreateListener(new MessageCreateEventListener(main));
-
-            if(this.getConfig().getBoolean("Enabled-Modules.Console")) {
-
-                LogAppender appender = new LogAppender(this);
-                logger.addAppender(appender);
+            if(getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
+            {
+                reportsList = sqlManager.getReports();
             }
-        } catch(Exception ex){
-            getLogger().severe("The plugin is not configured! Please enter a valid token!");
+            else
+                utils.createReportsYML();
+
+            utils.createMessagesYML();
+
+            iManager.initializeList();
+            for(Player p : Bukkit.getOnlinePlayers())
+                iManager.initializeReports(p);
+
+        }catch(Exception ex){
+            console.sendMessage(Utils.CCT("&c ERROR INITIALIZING MYSQL  "));
+ex.printStackTrace();
         }
+
+        if(this.getConfig().getBoolean("Enabled-Modules.Console")) {
+
+            LogAppender appender = new LogAppender(core);
+            ((org.apache.logging.log4j.core.Logger) LogManager.getRootLogger()).addAppender(appender);
+
+        }
+
         if (this.getConfig().getBoolean("Enabled-Modules.Announcements"))
             startAnnouncing();
         initializeCommands();
@@ -143,90 +126,48 @@ public class ReportPlus extends JavaPlugin implements PluginMessageListener{
         getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable(){
             public void run(){
                 if(main.getConfig().getBoolean("Enabled-Modules.Server-Stop-Start"))
-                bot.getTextChannelById(main.getConfig().getString("Server-Stop-Start-Channel")).get().sendMessage(main.getUtils().getMessagesConfig().getString("Server-Start-Message"));
+                    main.core.getJda().getTextChannelById(main.getConfig().getString("Server-Stop-Start-Channel")).sendMessage(main.getUtils().getMessagesConfig().getString("Server-Start-Message")).queue();
 
             }
         });
+        console.sendMessage(Utils.CCT("&c   &7PLUGIN LOADED.   "));
+        console.sendMessage(Utils.CCT("&c--- &6REPORTPLUS &c---"));
+
 
     }
 
-    public void onDisable(){
-        if(main.getConfig().getBoolean("Enabled-Modules.Server-Stop-Start"))
-            bot.getTextChannelById(this.getConfig().getString("Server-Stop-Start-Channel")).get().sendMessage(main.getUtils().getMessagesConfig().getString("Server-Stop-Message"));
+    public void checkDependencies() {
+        if (!Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
+            console.sendMessage(Utils.CCT("&c TITLE API NOT FOUND  "));
+        }else {
+            console.sendMessage(Utils.CCT("   &a TITLE API FOUND   "));
+        }
+
+        if (!Bukkit.getPluginManager().isPluginEnabled("Vault")) {
+            console.sendMessage(Utils.CCT("&c VAULT NOT FOUND  "));
+        }else {
+            console.sendMessage(Utils.CCT("   &a VAULT FOUND   "));
+        }
     }
+
     public void initializeVariables() {
         TOKEN = this.getConfig().getString("Discord-Bot-Token");
         cmdPrefix = this.getConfig().getString("Discord-Bot-Command-Prefix");
-        ChannelID = this.getConfig().getString("Discord-Channel-ID");
+        reportChannelID = this.getConfig().getString("Discord-Channel-ID");
         prefix = this.getConfig().getString("Prefix");
         CMDChannelID = this.getConfig().getString("Discord-CMD-Channel-ID");
         MCChannelID = this.getConfig().getString("Discord-MC-Channel-ID");
+        utils = new SpigotUtils(this);
+
         messagesList = this.getConfig().getStringList("Announcements");
+
         iManager = new InventoryManager(this);
-        iManager.initializeList();
-        for(Player p : Bukkit.getOnlinePlayers())
-            iManager.initializeReports(p);
-        utils = new Utils(this);
-
-
         selectedReports = new HashMap<>();
-        api = new ReportPlusAPI(this);
-        sqlManager = new MySQLManager(this);
+       // api = new ReportPlusAPI(this);
     }
 
-    public static ReportPlusAPI getApi() {
-        return api;
-    }
-
-    //  public DiscordApi getReportPlusBot() {
-    //    return reportPlusBot;
-    //}
-
-
-    public Map<String, Report> getSelectedReports() {
-        return selectedReports;
-    }
-
-    public void initializeCommands() {
-        this.getCommand("report").setExecutor(new ReportCommand(this));
-        this.getCommand("txtcmd").setExecutor(new TXTCmd(this));
-        this.getCommand("cmdcmd").setExecutor(new CmdCMD(this));
-        this.getCommand("reports").setExecutor(new ListReportsCMD(this));
-        this.getCommand("reportplus").setExecutor(new ReportPlusCommand(this));
-        if(this.getConfig().getBoolean("Commands-allowed")) {
-            bot.addListener(new me.xbones.reportplus.spigot.discord.ReloadCommand(this));
-            bot.addListener(new AddAnnouncementCommand(this));
-            bot.addListener(new ListAnnouncementsCommand(this));
-            bot.addListener(new HelpCommand(this));
-            bot.addListener(new DelAnnouncementCommand(this));
-            bot.addListener(new CloseReportWithMessage(this));
-        }
-        if (this.getConfig().getConfigurationSection("Cmds") != null) {
-            Set<String> Cmds;
-            Cmds = this.getConfig().getConfigurationSection("Cmds").getKeys(false);
-            for (String cmd : Cmds) {
-               bot.addListener(new CustomCMD(this, cmd));
-            }
-        }
-
-        if (this.getConfig().getConfigurationSection("TXTCmds") != null) {
-            Set<String> Cmds = new HashSet<>();
-            Cmds = this.getConfig().getConfigurationSection("TXTCmds").getKeys(false);
-            for (String cmd : Cmds) {
-                bot.addListener(new CustomTXTCMD(this, cmd));
-            }
-        }
-
-    }
-
-
-    private boolean setupPermissions()
-    {
-        RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> permissionProvider = getServer().getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
-        if (permissionProvider != null) {
-            permission = permissionProvider.getProvider();
-        }
-        return (permission != null);
+    public ReportPlusAPI getAPI(){
+        return core.getApi();
     }
 
     public void initializeEvents(){
@@ -241,6 +182,21 @@ public class ReportPlus extends JavaPlugin implements PluginMessageListener{
         manager.registerEvents(new PlayerReportListener(this),this);
     }
 
+    private boolean setupChat(){
+        RegisteredServiceProvider<Chat> chatProvider = getServer().getServicesManager().getRegistration(net.milkbowl.vault.chat.Chat.class);
+        if (chatProvider != null) {
+            chat = chatProvider.getProvider();
+        }
+
+        return (chat != null);
+    }
+    private boolean setupPermissions(){
+        RegisteredServiceProvider<Permission> permissionProvider = getServer().getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
+        if (permissionProvider != null) {
+            permission = permissionProvider.getProvider();
+        }
+        return (permission != null);
+    }
 
     public InventoryClickListener getInventoryClickListener() {
         return inventoryClickListener;
@@ -253,73 +209,88 @@ public class ReportPlus extends JavaPlugin implements PluginMessageListener{
                 int index = random.nextInt(messagesList.size());
                 if (messagesList.get(index).equals(lastMessage))
                     index = random.nextInt(messagesList.size());
-                bot.getTextChannelById(main.getConfig().getString("Discord-Announcements-Channel-ID"))
-                        .get().sendMessage("```" + messagesList.get(index) + "```");
+                lastMessage = messagesList.get(index);
+                core.getJda().getTextChannelById(main.getConfig().getString("Discord-Announcements-Channel-ID"))
+                        .sendMessage("```" + messagesList.get(index) + "```").queue();
             }
 
         },0L, (long)this.getConfig().getInt("Interval") * 20);
-    }
-
-    public List<Report> getReportsList() {
-        return reportsList;
-    }
-    public List<String> getMessages(){
-        return messagesList;
-    }
-
-    public InventoryManager getInventoryManager() {
-        return iManager;
-    }
-
-    public void sendMessage(List<String> data) {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(stream);
-        try {
-            for(String message : data) {
-                out.writeUTF(message);
-            }
-        } catch (IOException e) {
-
-            e.printStackTrace();
-        }
-
-        getServer().sendPluginMessage(this, "reportplus:rs", stream.toByteArray());
-    }
-
-    public Set<String> getDiscordChosen() {
-        return discordChosen;
     }
 
     public Map<Player, Player> getReporting() {
         return reporting;
     }
 
-    public ReportPlus getMain() {
-        return main;
+    public Set<String> getBothChosen() {
+        return bothChosen;
     }
 
-    public DiscordApi getBot() {
-        return bot;
+    public Set<String> getSendingMessage() {
+        return sendingMessage;
+    }
+
+    public Set<String> getDiscordChosen() {
+        return discordChosen;
     }
 
     public Set<String> getMinecraftChosen() {
         return minecraftChosen;
     }
 
-    public String getPrefix() {
-        return prefix;
-    }
-
-    public String getMCChannelID() {
-        return MCChannelID;
-    }
-
-    public String getChannelID() {
-        return ChannelID;
-    }
-
     public String getCMDChannelID() {
         return CMDChannelID;
+    }
+
+    public SpigotUtils getUtils(){return utils;}
+
+    public void initializeCommands() {
+        this.getCommand("report").setExecutor(new ReportCommand(this));
+        this.getCommand("txtcmd").setExecutor(new TXTCmd(this));
+        this.getCommand("cmdcmd").setExecutor(new CmdCMD(this));
+        this.getCommand("reports").setExecutor(new ListReportsCMD(this));
+        this.getCommand("reportplus").setExecutor(new ReportPlusCommand(this));
+        core.addCommand(new ReloadCommand(core));
+        core.addCommand(new AddAnnouncementCommand(core));
+        core.addCommand(new ListAnnouncementsCommand(core));
+        core.addCommand(new HelpCommand(core));
+        core.addCommand(new DelAnnouncementCommand(core));
+        core.addCommand(new CloseReportWithMessage(core));
+        if (this.getConfig().getConfigurationSection("Cmds") != null) {
+            Set<String> Cmds;
+            Cmds = this.getConfig().getConfigurationSection("Cmds").getKeys(false);
+            for (String cmd : Cmds) {
+                core.addCommand(new CustomCMD(core, cmd));
+            }
+        }
+
+        if (this.getConfig().getConfigurationSection("TXTCmds") != null) {
+            Set<String> Cmds = new HashSet<>();
+            Cmds = this.getConfig().getConfigurationSection("TXTCmds").getKeys(false);
+            for (String cmd : Cmds) {
+                core.addCommand(new CustomTXTCMD(core, cmd));
+
+            }
+        }
+
+
+    }
+
+
+
+    public void setReportsList(List<Report> reports){
+        reportsList=reports;
+    }
+
+    public InventoryManager getInventoryManager() {
+        return iManager;
+    }
+    public Map<String, Report> getSelectedReports() {
+        return selectedReports;
+    }
+
+    public void NoPerm(Player p) {
+        p.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                prefix + " " + utils.getMessagesConfig().getString("No-Permission")));
     }
 
     public void showGUI(Player p) {
@@ -328,252 +299,244 @@ public class ReportPlus extends JavaPlugin implements PluginMessageListener{
 
     }
 
-    public void NoPerm(Player p) {
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                prefix + " " + main.getUtils().getMessagesConfig().getString("No-Permission")));
-    }
+    @Override
+    public void AddTextCMD(Object obj, String cmd, String text) {
 
-    public void sendMessageToChannel(Optional<TextChannel> channel, EmbedBuilder message) {
-        channel.get().sendMessage(message).join();
-    }
-
-    public void reportToDiscord(Player p,String reported, String Message) {
-        PlayerReportEvent event = new PlayerReportEvent(p, reported, Message, ReportType.DISCORD);
-        Bukkit.getPluginManager().callEvent(event);
-        if(event.isCancelled()) return;
-        String title = main.getUtils().getMessagesConfig().getString("Discord-Report-Title-Message.Title").replace("%player%", p.getName())
-                .replace("%report%", Message);
-        String subtitle = main.getUtils().getMessagesConfig().getString("Discord-Report-Title-Message.Subtitle")
-                .replace("%player%", p.getName()).replace("%report%", Message);
-
-        String imageLink = "https://cdn.discordapp.com/embed/avatars/0.png";
-        Player target = Bukkit.getPlayer(reported);
-        if (target != null) {
-            imageLink = "https://crafatar.com/avatars/" + target.getUniqueId();
-        }
-        sendMessageToChannel(bot.getTextChannelById(ChannelID),
-                new EmbedBuilder().setDescription(main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Description"))
-                        .setColor(new Color(16711682)).setThumbnail(imageLink).setTitle(main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Title"))
-                        .addField("Reporter", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Reporter").replace("%reporter%", p.getName()), false)
-                        .addField("Reported", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Reported").replace("%reported%", reported), false)
-                        .addField("Server", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Server").replace("%server%", Bukkit.getServerName()))
-                        .addField("Report ID", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Report-ID").replace("%reportid%", Integer.toString(reportsList.size() + 1)), false)
-                        .addField("Report Content", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Report-Content").replace("%reportcontent%", Message), false));
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " " + main.getUtils().getMessagesConfig().getString("Success-Report")));
-        Report r = new Report(reportsList.size() + 1, p.getName(),reported, Message, ReportType.DISCORD);
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        r.setDate(dtf.format(now));
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " &cYour report id is: " + r.getReportId()));
-        sqlManager.addReportToDatabase(r);
-        reportsList.add(r);
-        if(!getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
-            utils.saveReportsToConfig();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.hasPermission("reportplus.receive") || player.isOp()) {
-                if (Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
-                    TitleAPI.sendTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', title)));
-                    TitleAPI.sendSubTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', subtitle)));//(player, 10, 10, 10, ChatColor.translateAlternateColorCodes('&', title),
-                            //ChatColor.translateAlternateColorCodes('&', subtitle));
-                }
-            }
-        }
-
-
-    }
-
-    public MySQLManager getSqlManager() {
-        return sqlManager;
-    }
-
-    public void reportToBoth(Player p, String reported, String Message) {
-
-        PlayerReportEvent event = new PlayerReportEvent(p, reported, Message, ReportType.BOTH);
-        Bukkit.getPluginManager().callEvent(event);
-        if(event.isCancelled()) return;
-        List<String> message = new ArrayList<>();
-        message.add(DataMessageType.REPORT.toString());
-        message.add(p.getName());
-        message.add(reported);
-        message.add(Message);
-        sendMessage(message);
-        String title = main.getUtils().getMessagesConfig().getString("Discord-Report-Title-Message.Title").replace("%player%", p.getName())
-                .replace("%report%", Message);
-        String subtitle = main.getUtils().getMessagesConfig().getString("Discord-Report-Title-Message.Subtitle")
-                .replace("%player%", p.getName()).replace("%report%", Message);
-
-        String imageLink = "https://cdn.discordapp.com/embed/avatars/0.png";
-        Player target = Bukkit.getPlayer("None");
-        if (target != null) {
-            imageLink = "https://crafatar.com/avatars/" + target.getUniqueId();
-        }
-        sendMessageToChannel(bot.getTextChannelById(ChannelID),
-                new EmbedBuilder().setDescription(main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Description"))
-                        .setColor(new Color(16711682)).setThumbnail(imageLink).setTitle(main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Title"))
-                        .addField("Reporter", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Reporter").replace("%reporter%", p.getName()), false)
-                        .addField("Reported", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Reported").replace("%reported%", reported), false)
-                        .addField("Server", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Server").replace("%server%", Bukkit.getServerName()))
-                        .addField("Report ID", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Report-ID").replace("%reportid%", "" + reportsList.size() + 1), false)
-                        .addField("Report Content", main.getUtils().getMessagesConfig().getString("Discord-Report-Embed.Fields.Report-Content").replace("%reportcontent%", Message), false));
-
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.hasPermission("reportplus.receive") || player.isOp()) {
-                for (String s : main.getUtils().getMessagesConfig().getStringList("Minecraft-Report-Format")) {
-                    player.sendMessage(ChatColor.translateAlternateColorCodes('&', s.replace("%reporter%", player.getName()).replace("%reported%", reported).replace("%reportcontent%", Message)));
-
-                }
-                if (Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
-                    TitleAPI.sendTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', title)));
-                    TitleAPI.sendSubTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', subtitle)));//(player, 10, 10, 10, ChatColor.translateAlternateColorCodes('&', title),
-                    //ChatColor.translateAlternateColorCodes('&', subtitle));
-
-                }
-            }
-        }
-        Report r = new Report(reportsList.size() + 1, p.getName(), reported, Message, ReportType.BOTH);
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        r.setDate(dtf.format(now));
-        sqlManager.addReportToDatabase(r);
-        reportsList.add(r);
-        if(!getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
-        utils.saveReportsToConfig();
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " " + main.getUtils().getMessagesConfig().getString("Success-Report")));
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " &cYour report id is: " + r.getReportId()));
-
-    }
-
-    public void reportToStaff(Player player, String reported, String Message) {
-        PlayerReportEvent event = new PlayerReportEvent(player, reported, Message, ReportType.MINECRAFT);
-        Bukkit.getPluginManager().callEvent(event);
-        if(event.isCancelled()) return;
-        List<String> message = new ArrayList<>();
-        message.add(DataMessageType.REPORT.toString());
-        message.add(player.getName());
-        message.add(reported);
-        message.add(Message);
-        sendMessage(message);
-        String title = main.getUtils().getMessagesConfig().getString("Minecraft-Report-Title-Message.Title")
-                .replace("%player%", player.getName()).replace("%report%", Message);
-        String subtitle = main.getUtils().getMessagesConfig().getString("Minecraft-Report-Title-Message.Subtitle")
-                .replace("%player%", player.getName()).replace("%report%", Message);
-
-
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            if (p.hasPermission("reportplus.receive") || p.isOp()) {
-                for (String s : main.getUtils().getMessagesConfig().getStringList("Minecraft-Report-Format")) {
-                    p.sendMessage(ChatColor.translateAlternateColorCodes('&', s.replace("%reporter%", player.getName()).replace("%reported%", reported).replace("%reportcontent%", Message)));
-
-                }
-                if (Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
-
-                    TitleAPI.sendTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', title)));
-                    TitleAPI.sendSubTitle(player, new TextComponent(ChatColor.translateAlternateColorCodes('&', subtitle)));//(player, 10, 10, 10, ChatColor.translateAlternateColorCodes('&', title),
-                    //ChatColor.translateAlternateColorCodes('&', subtitle));
-
-                }
-            }
-        }
-
-        Report r = new Report(reportsList.size() + 1, player.getName(), reported, Message, ReportType.MINECRAFT);
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        r.setDate(dtf.format(now));
-        sqlManager.addReportToDatabase(r);
-        reportsList.add(r);
-        if(!getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
-        utils.saveReportsToConfig();
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " " + main.getUtils().getMessagesConfig().getString("Success-Report")));
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + " &cYour report id is: " + r.getReportId()));
-    }
-
-
-
-    public void AddTextCMD(CommandSender p, String cmd, String text) {
+        CommandSender p = (CommandSender)obj;
         main.getConfig().set("TXTCmds." + cmd + ".text", text);
         main.getConfig().set("TXTCmds." + cmd + ".description", "My cmd! (Configure this in the config.yml)");
         main.saveConfig();
-        main.reloadConfig();
+        main.reloadPluginConfig();
 
-        bot.addListener(new CustomTXTCMD(this, cmd));
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!"));
+        core.addCommand(new CustomTXTCMD(core, cmd));
+        p.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!"));
     }
 
-    public void AddCMDCMD(CommandSender p, String cmd, String cmdtobeexecuted) {
+    @Override
+    public void log(String text){
+        console.sendMessage(text);
+    }
+    @Override
+    public void AddCMDCMD(Object obj, String cmd, String cmdtobeexecuted) {
+        CommandSender p = (CommandSender)obj;
+
         main.getConfig().set("Cmds." + cmd + ".targetcmd", cmdtobeexecuted);
         main.getConfig().set("Cmds." + cmd + ".description", "My cmd! (Configure this in the config.yml)");
         main.getConfig().set("Cmds." + cmd + ".say", "My cmd executed! (Configure this in the config.yml)");
         main.saveConfig();
-        main.reloadConfig();
+        main.reloadPluginConfig();
 
-        bot.addListener(new CustomCMD(this, cmd));
-        p.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!"));
+        core.addCommand(new CustomCMD(core, cmd));
+        p.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!"));
     }
 
     @Override
-    public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!channel.equals("reportplus:rs")) {
-            return;
+    public void onDisable() {
+        super.onDisable();
+        console.sendMessage(Utils.CCT("&c--- &6REPORTPLUS &c---"));
+        core.disconnectBot();
+        console.sendMessage(Utils.CCT("&c    PLUGIN DISABLED   "));
+        console.sendMessage(Utils.CCT("&c--- &6REPORTPLUS &c---"));
+        if(main.getConfig().getBoolean("Enabled-Modules.Server-Stop-Start"))
+            core.getJda().getTextChannelById(this.getConfig().getString("Server-Stop-Start-Channel")).sendMessage(main.getUtils().getMessagesConfig().getString("Server-Stop-Message")).queue();
+
+    }
+
+    public List<Report> getReportsList() {
+        return reportsList;
+    }
+
+    @Override
+    public void setGame(JDA jda) {
+        jda.getPresence().setGame(Game.playing(((String)ConfigurationManager.get("Game")).replace("%players%",  String.valueOf(Bukkit.getOnlinePlayers().size()))));
+
+        if(getConfig().getBoolean("Auto-Refresh-Game")){
+            getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
+                @Override
+                public void run() {
+                    jda.getPresence().setGame(Game.playing(((String)ConfigurationManager.get("Game")).replace("%players%",  String.valueOf(Bukkit.getOnlinePlayers().size()))));
+                }
+            }, 1L, 10 * 20);
         }
+    }
 
-        ByteArrayInputStream stream = new ByteArrayInputStream(message);
-        DataInputStream in = new DataInputStream(stream);
-        try {
-            System.out.println("Received message.");
-            System.out.println(in.readUTF());
-            if(DataMessageType.valueOf(in.readUTF()).equals(DataMessageType.PUNISHMENT)){
-                System.out.println("Received punishement.");
-                String serverName = in.readUTF();
-                    String punished = in.readUTF();
-                    String punisher = in.readUTF();
-                    String reason = in.readUTF();
-                    PunishmentType type = PunishmentType.valueOf(in.readUTF());
-                    Punishment punishment = new Punishment(punisher,punished,reason,type);
+    @Override
+    public String getMCChannelID(){
+        return MCChannelID;
+    }
 
-                    getApi().sendPunishment(punishment);
+    @Override
+    public String getMessage(String path){
+        return utils.getMessagesConfig().getString(path);
+    }
+
+    @Override
+    public void broadcast(String message){
+        Bukkit.getServer().broadcastMessage(ChatColor.translateAlternateColorCodes('&', message));
+    }
+
+    @Override
+    public void dispatchCommand(String command){
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+    }
+
+    @Override
+    public void addAnnouncement(String text){
+        messagesList.add(text);
+        main.getConfig().set("Announcements", messagesList);
+        main.saveConfig();
+        main.reloadPluginConfig();
+    }
+
+    @Override
+    public void closeReport(String name, Report r, boolean discord, String Message){
+        inventoryClickListener.CloseReport(name, r, discord);
+
+        Player reportOwner = Bukkit.getPlayer(r.getReporter());
+        if(reportOwner != null){
+            reportOwner.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Message-Notification-Format").replace("%sender%", name).replace("%message%", Message)));
+        }else{
+
+            List<String> messages = new ArrayList<>();
+
+            if(main.getConfig().contains("User-Notifications." + r.getReporter()))
+                messages = main.getConfig().getStringList("User-Notifications." + r.getReporter());
+            messages.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Message-Notification-Format").replace("%sender%", name).replace("%message%", Message)));
+            main.getConfig().set("User-Notifications." +r.getReporter(), messages);
+            main.saveConfig();
+        }
+    }
+
+    @Override
+    public List<Report> getReports(){
+        return reportsList;
+    }
+
+    @Override
+    public void deleteAnnouncement(int id){
+        main.getMessages().remove(id - 1);
+        main.getConfig().set("Announcements", main.getMessages());
+        main.saveConfig();
+        main.reloadPluginConfig();
+    }
+
+    @Override
+    public void addCustomCommandsToEmbed(EmbedBuilder builder){
+
+        if (main.getConfig().getConfigurationSection("TXTCmds") != null) {
+            Set<String> Cmds = new HashSet<>();
+            Cmds = main.getConfig().getConfigurationSection("TXTCmds").getKeys(false);
+            for(String cmd : Cmds){
+                builder.addField("**" + cmd + "**", main.getConfig().getString("TXTCmds." + cmd + ".description"), false);
             }
-
         }
-        catch (IOException e) {
-            e.printStackTrace();
+
+        if (main.getConfig().getConfigurationSection("Cmds") != null) {
+            Set<String> Cmds;
+            Cmds = main.getConfig().getConfigurationSection("Cmds").getKeys(false);
+            for (String cmd : Cmds) {
+                builder.addField("**" + cmd + "**", main.getConfig().getString("Cmds." + cmd + ".description"), false);
+
+            }
         }
     }
 
-    public Utils getUtils() {
-        return utils;
+    @Override
+    public void reloadPluginConfig(){
+        this.reloadConfig();
     }
 
-    private boolean setupChat()
-    {
-        RegisteredServiceProvider<Chat> chatProvider = getServer().getServicesManager().getRegistration(net.milkbowl.vault.chat.Chat.class);
-        if (chatProvider != null) {
-            chat = chatProvider.getProvider();
+    @Override
+    public List<String> getMessages() {
+        return messagesList;
+    }
+
+    @Override
+    public boolean isOnline(UUID uuid){
+        return Bukkit.getPlayer(uuid) != null;
+    }
+
+    @Override
+    public String getReportsChannelID(){
+        return reportChannelID;
+    }
+
+    @Override
+    public String getServerName(RPlayer p){
+        return Bukkit.getServerName();
+    }
+
+    @Override
+    public void sendMessage(UUID uuid, String message){
+        Bukkit.getPlayer(uuid).sendMessage(message);
+    }
+
+    @Override
+    public String getPrefix(){
+        return prefix;
+    }
+
+    @Override
+    public MySQLManager getSqlManager(){
+        return sqlManager;
+    }
+
+    @Override
+    public void saveReportsToConfig(){
+        utils.saveReportsToConfig();
+    }
+
+    @Override
+    public void broadcastTitle(String title, String subtitle, String permission){
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.hasPermission(permission) || player.isOp()) {
+                if (Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
+                    TitleAPI.sendTitle(player, 10, 10, 10, ChatColor.translateAlternateColorCodes('&', title),ChatColor.translateAlternateColorCodes('&', subtitle));
+
+                    //ChatColor.translateAlternateColorCodes('&', subtitle));
+                }
+            }
         }
-
-        return (chat != null);
     }
 
-    public void setReportsList(List<Report> reportsList) {
-        this.reportsList = reportsList;
+    @Override
+    public void broadcastNewReport(RPlayer player, String title, String subtitle, String reported, String message){
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.hasPermission("reportplus.receive") || p.isOp()) {
+                for (String s : main.getUtils().getMessagesConfig().getStringList("Minecraft-Report-Format")) {
+                    p.sendMessage(ChatColor.translateAlternateColorCodes('&', s.replace("%reporter%", player.getName()).replace("%reported%", reported).replace("%reportcontent%", message)));
+
+                }
+                if (Bukkit.getPluginManager().isPluginEnabled("TitleAPI")) {
+
+                    TitleAPI.sendTitle(p, 10, 10, 10, ChatColor.translateAlternateColorCodes('&', title),ChatColor.translateAlternateColorCodes('&', subtitle));
+                    //ChatColor.translateAlternateColorCodes('&', subtitle));
+
+                }
+            }
+        }
+    }
+
+    public Core getCore() {
+        return core;
+    }
+
+    public Permission getPermission() {
+        return permission;
     }
 
     public Chat getChat() {
         return chat;
     }
 
-    public net.milkbowl.vault.permission.Permission getPermission() {
-        return permission;
+    public Object getPlayer(UUID uuid){return Bukkit.getPlayer(uuid);}
+
+    public void callEvent(Object event){
+        Event e = (Event) event;
+        Bukkit.getPluginManager().callEvent(e);
     }
 
-    public Set<String> getBothChosen() {
-        return bothChosen;
-    }
-
-    public  String getCmdPrefix(){
-        return cmdPrefix;
-    }
-
-    public Set<String> getSendingMessage() {
-        return sendingMessage;
-    }
+    @Override
+    public void sendConsole(String message){console.sendMessage(message);}
 }
+

@@ -1,5 +1,7 @@
 package me.xbones.reportplus.bungee;
 
+import me.xbones.reportplus.core.Core;
+import me.xbones.reportplus.core.configuration.ConfigurationManager;
 import net.md_5.bungee.api.ChatColor;
 
 import java.text.SimpleDateFormat;
@@ -8,9 +10,9 @@ import java.util.logging.LogRecord;
 
 public class LogAppender extends java.util.logging.Handler {
 
-     private me.xbones.reportplus.bungee.ReportPlus main;
+     private Core main;
 
-     public LogAppender(ReportPlus main) {
+     public LogAppender(Core main) {
 
          this.main = main;
      }
@@ -33,8 +35,8 @@ public class LogAppender extends java.util.logging.Handler {
          SimpleDateFormat formatter;
          formatter = new SimpleDateFormat("HH:mm:ss");
          message = "[" + formatter.format(new Date(record.getMillis())) + " " + record.getLevel().toString() + "] " + message;
-         if (main.getBot() != null)
-             main.getBot().getTextChannelById((String)main.getValue("Console-Channel-ID", "[INSERT ID HERE]")).get().sendMessage(ChatColor.stripColor(message));
+         if (main.getJda() != null)
+             main.getJda().getTextChannelById((String) ConfigurationManager.get("Console-Channel-ID")).sendMessage(ChatColor.stripColor(message)).queue();
 
 
      }

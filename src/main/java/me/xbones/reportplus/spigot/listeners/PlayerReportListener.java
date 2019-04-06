@@ -1,7 +1,7 @@
 package me.xbones.reportplus.spigot.listeners;
 
+import me.xbones.reportplus.core.events.SpigotPlayerReportEvent;
 import me.xbones.reportplus.spigot.ReportPlus;
-import me.xbones.reportplus.spigot.events.PlayerReportEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -16,8 +16,9 @@ public class PlayerReportListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onReport(PlayerReportEvent e)
+    public void onReport(SpigotPlayerReportEvent e)
     {
-        main.getSqlManager().refresh();
+        if(main.getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
+        main.setReportsList(main.getSqlManager().getReports());
     }
 }

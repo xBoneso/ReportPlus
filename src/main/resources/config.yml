@@ -11,7 +11,7 @@ Enabled-Modules:
   Death-log:
     Enabled: true
     Channel-ID: "[INSERT ID HERE]"
-  Announcements: true
+  Announcements: false
   Log-leave-and-join: true
   Punishment-Broadcast:
     Enabled: true
@@ -35,8 +35,6 @@ Discord-Bot-Token: "[INSERT TOKEN HERE]"
 
 ## Change bot game
 Change-Game: true
-
-Commands-allowed: true
 
 ## Discord bot game - Your bot will be playing whatever you enter below
 Game: '%players% players are currently online!'

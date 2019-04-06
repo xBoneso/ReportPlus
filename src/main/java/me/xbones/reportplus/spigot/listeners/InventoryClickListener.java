@@ -1,7 +1,6 @@
 package me.xbones.reportplus.spigot.listeners;
 
-import me.xbones.reportplus.DataMessageType;
-import me.xbones.reportplus.spigot.Report;
+import me.xbones.reportplus.core.Report;
 import me.xbones.reportplus.spigot.ReportPlus;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -13,7 +12,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class InventoryClickListener implements Listener {
@@ -32,107 +30,109 @@ public class InventoryClickListener implements Listener {
         clicked = event.getCurrentItem();
         inventory = event.getInventory();
         String reportMsg = main.getUtils().getMessagesConfig().getString("Button-Click-Message");
-        if (main.getInventoryManager().getReportInventory() != null && inventory.getName().equals(main.getInventoryManager().getReportInventory().getName())) {
-            if (clicked != null) {
-                if (clicked.getType() == Material.STAINED_GLASS_PANE) {
-                    event.setCancelled(true);
-                    player.closeInventory();
-                } else if (clicked.getType() == Material.EYE_OF_ENDER) {
-                    if (player.hasPermission("reportplus.use")) {
-                        main.getDiscordChosen().add(player.getName());
+        try {
+            if (main.getInventoryManager().getReportInventory() != null && inventory.getName().equals(main.getInventoryManager().getReportInventory().getName())) {
+                if (clicked != null) {
+                    if (clicked.getType() == Material.STAINED_GLASS_PANE) {
+                        event.setCancelled(true);
                         player.closeInventory();
-                        player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
+                    } else if (clicked.getType() == Material.EYE_OF_ENDER) {
+                        if (player.hasPermission("reportplus.use")) {
+                            main.getDiscordChosen().add(player.getName());
+                            player.closeInventory();
+                            player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
 
-                    } else {
-                        event.setCancelled(true);
-                    }
-                } else if (clicked.getType() == Material.GRASS) {
-                    if (player.hasPermission("reportplus.use")) {
-                        main.getMinecraftChosen().add(player.getName());
-                        player.closeInventory();
-                        player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
-                    } else {
-                        event.setCancelled(true);
-                    }
+                        } else {
+                            event.setCancelled(true);
+                        }
+                    } else if (clicked.getType() == Material.GRASS) {
+                        if (player.hasPermission("reportplus.use")) {
+                            main.getMinecraftChosen().add(player.getName());
+                            player.closeInventory();
+                            player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
+                        } else {
+                            event.setCancelled(true);
+                        }
 
-                } else if (clicked.getType() == Material.BOOK) {
-                    if (player.hasPermission("reportplus.listreports")) {
-                        main.getInventoryManager().initializeList();
-                        player.openInventory(main.getInventoryManager().getReportsList());
-                    } else {
-                        event.setCancelled(true);
-                    }
-                } else if (clicked.getType() == Material.ENDER_PEARL) {
-                    if (player.hasPermission("reportplus.use")) {
-                        main.getBothChosen().add(player.getName());
-                        player.closeInventory();
-                        player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
+                    } else if (clicked.getType() == Material.BOOK) {
+                        if (player.hasPermission("reportplus.listreports")) {
+                            main.getInventoryManager().initializeList();
+                            event.setCancelled(true);
+                            player.openInventory(main.getInventoryManager().getReportsList());
+                        } else {
+                            event.setCancelled(true);
+                        }
+                    } else if (clicked.getType() == Material.ENDER_PEARL) {
+                        if (player.hasPermission("reportplus.use")) {
+                            main.getBothChosen().add(player.getName());
+                            player.closeInventory();
+                            player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + reportMsg));
+                        }
                     }
                 }
-            }
 
-        } else if (inventory.getName().equals(main.getInventoryManager().getReportsList().getName())) {
-            if (clicked.getType() == Material.BOOK_AND_QUILL) {
-                List<String> lore;
-                lore = clicked.getItemMeta().getLore();
-                String reporter = lore.get(0);
-                String reportid = lore.get(1);
-                String report = lore.get(2);
+            } else if (inventory.getName().equals(main.getInventoryManager().getReportsList().getName())) {
+                if (clicked.getType() == Material.BOOK_AND_QUILL) {
+                    List<String> lore;
+                    lore = clicked.getItemMeta().getLore();
+                    String reporter = lore.get(0);
+                    String reportid = lore.get(1);
+                    String report = lore.get(2);
 
-                for (Report r : main.getReportsList()) {
-                    if (reporter.equals(ChatColor.GREEN + "Reporter: " + r.getReporter())) {
-                        if (reportid.equals(ChatColor.RED + "Report id: " + r.getReportId())) {
-                            if (report.equals(ChatColor.AQUA + "Report: " + r.getReportContent())) {
-                                main.getSelectedReports().put(player.getName(), r);
+                    for (Report r : main.getReportsList()) {
+                        if (reporter.equals(ChatColor.GREEN + "Reporter: " + r.getReporter())) {
+                            if (reportid.equals(ChatColor.RED + "Report id: " + r.getReportId())) {
+                                if (report.equals(ChatColor.AQUA + "Report: " + r.getReportContent())) {
+                                    main.getSelectedReports().put(player.getName(), r);
 
-                                main.getInventoryManager().initializeCloseReportInventory(r);
-                                event.setCancelled(true);
-                                player.openInventory(main.getInventoryManager().getCloseReportInventory(r).getInventory());
+                                    main.getInventoryManager().initializeCloseReportInventory(r);
+                                    event.setCancelled(true);
+                                    player.openInventory(main.getInventoryManager().getCloseReportInventory(r).getInventory());
 
+                                }
                             }
                         }
                     }
                 }
+            } else if (ChatColor.translateAlternateColorCodes('&', inventory.getName()).equals(main.getInventoryManager().getCloseReportInventory(main.getSelectedReports().get(player.getName())).getName())) {
+
+                Report r = main.getSelectedReports().get(player.getName());
+                if (clicked.getType() == Material.WOOL && clicked.getDurability() == (short) 14) {
+
+                    player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + main.getUtils().getMessagesConfig().getString("Enter-Message")));
+                    player.closeInventory();
+                    main.getSendingMessage().add(player.getName());
+
+                } else if (clicked.getType() == Material.WOOL && clicked.getDurability() == (short) 5) {
+                    player.closeInventory();
+                    main.getInventoryManager().initializeList();
+                    player.openInventory(main.getInventoryManager().getReportsList());
+                    main.getSelectedReports().remove(player.getName());
+                } else if (clicked.getType() == Material.BARRIER) {
+                    CloseReport(player, r);
+                    main.getSelectedReports().remove(player.getName());
+                }
+                event.setCancelled(true);
+
             }
-        }
-
-
-        else if (ChatColor.translateAlternateColorCodes('&',inventory.getName()).equals(main.getInventoryManager().getCloseReportInventory(main.getSelectedReports().get(player.getName())).getName())) {
-
-            Report r = main.getSelectedReports().get(player.getName());
-            if(clicked.getType() == Material.WOOL && clicked.getDurability() == (short)14){
-
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " " + main.getUtils().getMessagesConfig().getString("Enter-Message")));
-                player.closeInventory();
-                main.getSendingMessage().add(player.getName());
-
-            } else if(clicked.getType() == Material.WOOL && clicked.getDurability() == (short)5){
-                player.closeInventory();
-                main.getInventoryManager().initializeList();
-                player.openInventory(main.getInventoryManager().getReportsList());
-                main.getSelectedReports().remove(player.getName());
-            } else if(clicked.getType() == Material.BARRIER){
-                CloseReport(player, r);
-                main.getSelectedReports().remove(player.getName());
-            }
-            event.setCancelled(true);
-
+        }catch(NullPointerException ex){
         }
     }
 
     public void CloseReport(Player player, Report r){
         inventory.remove(clicked);
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                main.getPrefix() + " &aSuccessfully closed report &c#" + r.getReportId()));
+                main.getPrefix() + " " + main.getUtils().getMessagesConfig().getString("Success-Close-Report").replace("%id%", String.valueOf(r.getReportId()))));
         if(Bukkit.getPlayer(r.getReporter()) != null)
             Bukkit.getPlayer(r.getReporter()).sendMessage(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId()))));
         else {
             if(main.getConfig().getStringList("User-Notifications." + r.getReporter()) != null){
+
                 List<String> notifications = main.getConfig().getStringList("User-Notifications." + r.getReporter());
                 notifications.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId()))));
-                main.getConfig().set("User-Notifications." + r.getReporter(), notifications);
+                main.getConfig().set("User-Notifications." +r.getReporter(), notifications);
                 main.saveConfig();
-                main.reloadConfig();
+                main.reloadPluginConfig();
             }
         }
         for (Player p : main.getServer().getOnlinePlayers()) {
@@ -153,13 +153,6 @@ public class InventoryClickListener implements Listener {
                 }
             }
         }
-        List<String> data = new ArrayList<>();
-        data.add(DataMessageType.LOG.toString());
-        data.add(player.getName());
-        data.add("false");
-        data.add(String.valueOf(r.getReportId()));
-        data.add(r.getReportContent());
-        main.sendMessage(data);
         player.closeInventory();
         main.getReportsList().remove(r);
         if(main.getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
@@ -180,12 +173,12 @@ public class InventoryClickListener implements Listener {
         if(Bukkit.getPlayer(r.getReporter()) != null)
             Bukkit.getPlayer(r.getReporter()).sendMessage(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId()))));
         else {
-            if(main.getConfig().getStringList("User-Notifications." + r.getReporter()) != null){
+            if(main.getConfig().getStringList("User-Notifications." +r.getReporter()) != null){
                 List<String> notifications = main.getConfig().getStringList("User-Notifications." + r.getReporter());
                 notifications.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId()))));
                 main.getConfig().set("User-Notifications." + r.getReporter(), notifications);
                 main.saveConfig();
-                main.reloadConfig();
+                main.reloadPluginConfig();
             }
         }
         for (Player p : main.getServer().getOnlinePlayers()) {
@@ -206,13 +199,6 @@ public class InventoryClickListener implements Listener {
                 }
             }
         }
-        List<String> data = new ArrayList<>();
-        data.add(DataMessageType.LOG.toString());
-        data.add(closer);
-        data.add(String.valueOf(discord));
-        data.add(String.valueOf(r.getReportId()));
-        data.add(r.getReportContent());
-        main.sendMessage(data);
         main.getReportsList().remove(r);
         if(main.getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
             main.getSqlManager().removeReportFromDatabase(r);

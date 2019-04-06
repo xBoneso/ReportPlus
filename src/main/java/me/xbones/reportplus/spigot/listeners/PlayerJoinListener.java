@@ -1,6 +1,7 @@
 package me.xbones.reportplus.spigot.listeners;
 
 import me.xbones.reportplus.spigot.ReportPlus;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,18 +23,24 @@ public class PlayerJoinListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
         if(main.getConfig().getBoolean("Enabled-Modules.Log-leave-and-join")) {
-            main.getBot().getTextChannelById(main.getMCChannelID()).get()
-                    .sendMessage(main.getUtils().getMessagesConfig().getString("Discord-Join-Message").replace("%player%", p.getName()));
+            main.getCore().getJda().getTextChannelById(main.getMCChannelID())
+                    .sendMessage(main.getUtils().getMessagesConfig().getString("Discord-Join-Message").replace("%player%", p.getName())).queue();
         }
 
-        if(main.getConfig().getStringList("User-Notifications." + e.getPlayer().getName()) != null){
-            List<String> notifications = main.getConfig().getStringList("User-Notifications." +e.getPlayer().getName());
-            for(String s: notifications){
-                e.getPlayer().sendMessage(ChatColor.translateAlternateColorCodes('&', s));
-            }
-            main.getConfig().set("User-Notifications." +e.getPlayer().getName(), null);
+        if(main.getConfig().getStringList("User-Notifications." + p.getName()) != null){
+            List<String> notifications = main.getConfig().getStringList("User-Notifications." + p.getName());
+
+            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(main, new Runnable(){
+                public void run(){
+                    for(String s: notifications){
+                        e.getPlayer().sendMessage(ChatColor.translateAlternateColorCodes('&', s));
+                    }
+                }
+            });
+
+            main.getConfig().set("User-Notifications." + p.getName(), null);
             main.saveConfig();
-            main.reloadConfig();
+            main.reloadPluginConfig();
         }
     }
 }

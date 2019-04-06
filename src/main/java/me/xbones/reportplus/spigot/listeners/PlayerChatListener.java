@@ -1,8 +1,9 @@
 package me.xbones.reportplus.spigot.listeners;
 
-import me.xbones.reportplus.spigot.Report;
+import me.xbones.reportplus.core.RPlayer;
+import me.xbones.reportplus.core.Report;
 import me.xbones.reportplus.spigot.ReportPlus;
-import me.xbones.reportplus.spigot.utils.Utils;
+import me.xbones.reportplus.spigot.SpigotUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -33,7 +34,7 @@ public class PlayerChatListener implements Listener {
             reported = main.getReporting().get(p).getName();
 
         if (PlayerIsInMCMode) {
-            main.reportToStaff(p, reported, e.getMessage());
+            main.getCore().reportToStaff(new RPlayer(main.getCore(), p.getName(), p.getUniqueId()), reported, e.getMessage());
 
             main.getMinecraftChosen().remove(p.getName());
 
@@ -43,14 +44,14 @@ public class PlayerChatListener implements Listener {
             return;
         } else if (PlayerInDiscordMode) {
 
-                main.reportToDiscord(p, reported, e.getMessage());
-            main.getDiscordChosen().remove(e.getPlayer().getName());
+                main.getCore().reportToDiscord(new RPlayer(main.getCore(), p.getName(), p.getUniqueId()), reported, e.getMessage());
+            main.getDiscordChosen().remove(p.getName());
             if (main.getReporting().containsKey(p))
                 main.getReporting().remove(p);
             e.setCancelled(true);
             return;
         } else if(PlayerInBothMode){
-                main.reportToBoth(p, reported, e.getMessage());
+                main.getCore().reportToBoth(new RPlayer(main.getCore(), p.getName(), p.getUniqueId()), reported, e.getMessage());
             main.getBothChosen().remove(p.getName());
             if(main.getReporting().containsKey(p)) main.getReporting().remove(p);
             e.setCancelled(true);
@@ -63,7 +64,7 @@ public class PlayerChatListener implements Listener {
             }else{
                 List<String> messages = new ArrayList<>();
                 messages.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Message-Notification-Format").replace("%sender%", e.getPlayer().getName()).replace("%message%", e.getMessage())));
-                main.getConfig().set("User-Notifications." + selectedReport.getReporter(), messages);
+                main.getConfig().set("User-Notifications." + p.getName(), messages);
             }
             main.getSendingMessage().remove(p.getName());
             e.setCancelled(true);
@@ -82,7 +83,7 @@ public class PlayerChatListener implements Listener {
 
                         String group = main.getPermission().getPrimaryGroup(p);
                         if (group != null) {
-                            prefix = Utils.removeColorCodes(group);
+                            prefix = SpigotUtils.removeColorCodes(group);
                         }
                     }
                 } catch (Exception ex) {
@@ -100,7 +101,7 @@ public class PlayerChatListener implements Listener {
                         String[] groups = main.getChat().getPlayerGroups(p);
                         String group = main.getChat().getGroupPrefix(p.getWorld(), groups[0]);
                         if (group != null) {
-                            prefix = Utils.removeColorCodes(group);
+                            prefix = SpigotUtils.removeColorCodes(group);
                         }
                     }
                 } catch (Exception ex) {
@@ -118,8 +119,8 @@ public class PlayerChatListener implements Listener {
                 }
             }
 
-            main.getBot().getTextChannelById(main.getMCChannelID()).get()
-                    .sendMessage(message);
+            main.getCore().getJda().getTextChannelById(main.getMCChannelID())
+                    .sendMessage(message).queue();
         }
 
     }

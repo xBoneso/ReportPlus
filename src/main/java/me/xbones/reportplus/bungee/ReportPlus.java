@@ -1,271 +1,583 @@
 package me.xbones.reportplus.bungee;
 
-import me.xbones.reportplus.DataMessageType;
-import me.xbones.reportplus.bungee.api.ReportPlusBungeeAPI;
-import me.xbones.reportplus.bungee.punishments.Punishment;
-import me.xbones.reportplus.spigot.Report;
+import com.github.fernthedev.fernapi.server.bungee.FernBungeeAPI;
+import com.github.fernthedev.fernapi.universal.Sorter;
+import com.github.fernthedev.fernapi.universal.handlers.FernAPIPlugin;
+import me.xbones.reportplus.api.ReportPlusAPI;
+import me.xbones.reportplus.bungee.Bstats.Metrics;
+import me.xbones.reportplus.bungee.commands.*;
+import me.xbones.reportplus.bungee.listeners.*;
+import me.xbones.reportplus.core.*;
+import me.xbones.reportplus.core.MySQL.MySQLManager;
+import me.xbones.reportplus.core.chatcomponentapi.ChatComponentMessage;
+import me.xbones.reportplus.core.commands.*;
+import me.xbones.reportplus.core.configuration.ConfigurationManager;
+import net.dv8tion.jda.core.EmbedBuilder;
+import net.dv8tion.jda.core.JDA;
+import net.dv8tion.jda.core.entities.Game;
 import net.md_5.bungee.api.ChatColor;
+import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
-import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
-import net.md_5.bungee.api.connection.Server;
-import net.md_5.bungee.api.event.PluginMessageEvent;
-import net.md_5.bungee.api.plugin.Listener;
-import net.md_5.bungee.api.plugin.Plugin;
+import net.md_5.bungee.api.plugin.Event;
+import net.md_5.bungee.api.plugin.PluginManager;
 import net.md_5.bungee.config.Configuration;
 import net.md_5.bungee.config.ConfigurationProvider;
 import net.md_5.bungee.config.YamlConfiguration;
-import net.md_5.bungee.event.EventHandler;
-import org.apache.logging.log4j.Level;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.DiscordApiBuilder;
+import net.milkbowl.vault.chat.Chat;
+import org.apache.logging.log4j.LogManager;
 
-import java.io.*;
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class ReportPlus extends Plugin implements Listener {
+public class ReportPlus extends FernBungeeAPI implements IReportPlus {
 
-    private static ReportPlusBungeeAPI api;
-    private DiscordApi bot;
-	private static final java.util.logging.Logger logger = ProxyServer.getInstance().getLogger();
-    private Configuration configuration;
-    private List<Report> listOfreports;
-    public void onEnable() {
-		this.getProxy().registerChannel("reportplus:rs");
-        this.getProxy().getPluginManager().registerListener(this, this);
-        this.getProxy().getPluginManager().registerListener(this, new PlayerMessageListener(this));
-        api= new ReportPlusBungeeAPI(this);
-        listOfreports = new ArrayList<>();
+    // VARIABLES //
+    private Core core;
+    private String TOKEN;
+    private String cmdPrefix;
+    private String reportChannelID, CMDChannelID, MCChannelID;
 
+    private Set<String> minecraftChosen = new HashSet<>();
+    private Set<String> discordChosen = new HashSet<>();
+    private Set<String> bothChosen = new HashSet<>();
+    private Set<String> sendingMessage = new HashSet<>();
+    private Map<ProxiedPlayer, ProxiedPlayer> reporting = new HashMap<>();
+    private String prefix;
+    private MySQLManager sqlManager;
+    private List<Report> reportsList;
+    private BungeeUtils utils;
+    private List<String> messagesList;
+    private String lastMessage = "";
+    private ReportPlus main;
+    private Map<String,Report> selectedReports;
+    private CommandSender console;
+    private Chat chat = null;
+    private static final java.util.logging.Logger logger = ProxyServer.getInstance().getLogger();
+    private net.milkbowl.vault.permission.Permission permission = null;
+    private Configuration config;
+    // VARIABLES //
+
+    @Override
+    public void onEnable(){
+        super.onEnable();
+        core = new Core();
+        main = this;
+        new Metrics(this);
+        new ConfigurationManager(true);
+        initConfig();
+        ConfigurationManager.SetConfig(getConfig());
+        core.setBungeecord(true);
+        console = getProxy().getConsole();
+        console.sendMessage(new TextComponent(Utils.CCT("&c--- &6REPORTPLUS BUNGEE &c---")));
+        console.sendMessage(new TextComponent(Utils.CCT("&c     &7LOADING...     ")));
+
+        checkDependencies();
+
+        initializeVariables();
+
+        try {
+            core.initializeBot(this, TOKEN  , cmdPrefix);
+        }catch(Exception ex){
+            console.sendMessage(new TextComponent(Utils.CCT("&c ERROR INITIALIZING BOT  ")));
+            ex.printStackTrace();
+        }
 
         try{
-            initConfig();
-            bot = new DiscordApiBuilder().setToken((String)getValue("Discord-Bot-Token", "[INSERT TOKEN HERE]")).login().join();
-            if ((boolean)getValue("Change-Game", true)) {
-                bot.updateActivity(((String)getValue("Game", "%players% are currently online")).replace("%players%",  String.valueOf(getProxy().getOnlineCount())));
-                if ((boolean)getValue("Auto-Refresh-Game", true)) {
-                    getProxy().getScheduler().schedule(this, new Runnable() {
-                        @Override
-                        public void run() {
-                            bot.updateActivity(((String)getValue("Game", "%players% are currently online")).replace("%players%",  String.valueOf(getProxy().getOnlineCount())));
-                        }
-                    }, 1L, Long.valueOf((int)getValue("Refresh-Interval", 20)), TimeUnit.SECONDS);
-                }
-            }
-            bot.addMessageCreateListener(new MessageCreateEventListener(this));
-            if((boolean)getValue("Enabled-Modules.Console", true))
-            logger.addHandler(new LogAppender(this));
+            reportsList = new ArrayList<>();
+            sqlManager = new MySQLManager(core);
 
-        } catch(Exception ex){
-            getLogger().severe("The plugin is not configured! Please enter a valid token!");
+            if(getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
+            {
+                reportsList = sqlManager.getReports();
+            }
+            else
+                utils.createReportsYML();
+
+
+
+        }catch(Exception ex){
+            console.sendMessage(new TextComponent(Utils.CCT("&c ERROR INITIALIZING MYSQL  ")));
+            ex.printStackTrace();
         }
-	}
+        utils.createMessagesYML();
 
-    public DiscordApi getBot() {
-        return bot;
-    }
+        if(this.getConfig().getBoolean("Enabled-Modules.Console")) {
 
-    public Configuration getConfig() {
-        return configuration;
-    }
-    public Object getValue(String path,Object defval) {
-        try {
-            if (!getDataFolder().exists()) {
-                getDataFolder().mkdir();
+            logger.addHandler(new LogAppender(core));
+
+        }
+
+        if (this.getConfig().getBoolean("Enabled-Modules.Announcements"))
+            startAnnouncing();
+        initializeCommands();
+        initializeEvents();
+        getProxy().getScheduler().schedule(this, new Runnable(){
+            public void run(){
+                if(main.getConfig().getBoolean("Enabled-Modules.Server-Stop-Start"))
+                    main.core.getJda().getTextChannelById(main.getConfig().getString("Server-Stop-Start-Channel")).sendMessage(main.getUtils().getMessagesConfig().getString("Server-Start-Message")).queue();
+
             }
+        }, 1, TimeUnit.SECONDS);
+        console.sendMessage(new TextComponent(Utils.CCT("&c   &7PLUGIN LOADED.   ")));
+        console.sendMessage(new TextComponent(Utils.CCT("&c--- &6REPORTPLUS BUNGEE &c---")));
+
+
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        console.sendMessage(new TextComponent(Utils.CCT("&c--- &6REPORTPLUS BUNGEE &c---")));
+        core.disconnectBot();
+        console.sendMessage(new TextComponent(Utils.CCT("&c    PLUGIN DISABLED   ")));
+        console.sendMessage(new TextComponent(Utils.CCT("&c--- &6REPORTPLUS BUNGEE &c---")));
+        if(main.getConfig().getBoolean("Enabled-Modules.Server-Stop-Start"))
+            core.getJda().getTextChannelById(this.getConfig().getString("Server-Stop-Start-Channel")).sendMessage(main.getUtils().getMessagesConfig().getString("Server-Stop-Message")).queue();
+
+    }
+
+    public void initConfig(){
+        try {
+
+            if (!getDataFolder().exists())
+                getDataFolder().mkdir();
 
             File file = new File(getDataFolder(), "config.yml");
 
-            if (!file.exists()) {
-                file.createNewFile();
 
-            }
-                configuration = ConfigurationProvider.getProvider(YamlConfiguration.class).load(file);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        if(path != null && defval != null) {
-            if(configuration.get(path) == null) {
-                configuration.set(path,defval);
-                //saveFiles(config,configfile);
-                try {
-                    ConfigurationProvider.getProvider(YamlConfiguration.class).save(configuration, new File(getDataFolder(), "config.yml"));
-                }catch (Exception e){
+            if (!file.exists()) {
+                try (InputStream in = getResourceAsStream("bungee config.yml")) {
+                    Files.copy(in, file.toPath());
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
 
-            return configuration.get(path);
+             config = ConfigurationProvider.getProvider(YamlConfiguration.class).load(new File(getDataFolder(), "config.yml"));
+        } catch(Exception ex){
+            ex.printStackTrace();
         }
+    }
+    public Configuration getConfig() {
+       return config;
+    }
+
+    public void saveConfig(){
+        try{
+            ConfigurationProvider.getProvider(YamlConfiguration.class).save(getConfig(), new File(getDataFolder(), "config.yml"));
+
+        }catch(Exception ex){
+            ex.printStackTrace();
+        }
+    }
+
+    public void checkDependencies() {
+        /*
+        if (!getProxy().getPluginManager().isPluginEnabled("TitleAPI")) {
+            console.sendMessage(Utils.CCT("&c TITLE API NOT FOUND  "));
+        }else {
+            console.sendMessage(Utils.CCT("   &a TITLE API FOUND   "));
+        }
+
+        if (!Bukkit.getPluginManager().isPluginEnabled("Vault")) {
+            console.sendMessage(Utils.CCT("&c VAULT NOT FOUND  "));
+        }else {
+            console.sendMessage(Utils.CCT("   &a VAULT FOUND   "));
+        }*/
+    }
+
+    public void initializeVariables() {
+        TOKEN = this.getConfig().getString("Discord-Bot-Token");
+        cmdPrefix = this.getConfig().getString("Discord-Bot-Command-Prefix");
+        reportChannelID = this.getConfig().getString("Discord-Channel-ID");
+        prefix = this.getConfig().getString("Prefix");
+        CMDChannelID = this.getConfig().getString("Discord-CMD-Channel-ID");
+        MCChannelID = this.getConfig().getString("Discord-MC-Channel-ID");
+        utils = new BungeeUtils(this);
+
+        messagesList = this.getConfig().getStringList("Announcements");
+
+        selectedReports = new HashMap<>();
+        // api = new ReportPlusAPI(this);
+    }
+
+    public ReportPlusAPI getAPI(){
+        return core.getApi();
+    }
+
+    public void initializeEvents(){
+        PluginManager manager = getProxy().getPluginManager();
+        manager.registerListener(this, new PlayerChatListener(core));
+        manager.registerListener(this, new PlayerCommandListener(core, this));
+        manager.registerListener(this,new PlayerJoinListener(core,this));
+        manager.registerListener(this,new PlayerLeaveListener(core,this));
+        manager.registerListener(this, new PlayerReportListener(this));
+    }
+
+    public Core getCore() {
+        return core;
+    }
+
+    public void NoPerm(ProxiedPlayer p){
+        p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&',
+                prefix + " " + utils.getMessagesConfig().getString("No-Permission"))));
+    }
+
+    public void listReports(ProxiedPlayer p, int pageNumber){
+        int pageIndex = pageNumber - 1;
+        if(reportsList.size() < 1){
+            ChatComponentMessage message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&cThere are no reports."));
+
+            p.sendMessage(message.getComponent());
+            return;
+        }
+        List<List<Report>> pages = chopped(reportsList, 5);
+        List<Report> page = pages.get(pageIndex);
+        for(Report r : page)
+        {
+            ChatComponentMessage message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', "&7Report &b#&c" + r.getReportId() +" &7- By &c" + r.getReporter() + " &7 - Reported: &c" + r.getReported() + " &7- Server: &c" + r.getServer()));
+
+            message.addHover(ChatColor.translateAlternateColorCodes('&', "&6" + r.getReportContent()));
+            message.addClick(ClickEvent.Action.SUGGEST_COMMAND, "/closereport " + r.getReportId() + " Your Message here");
+            p.sendMessage(message.getComponent());
+        }
+
+        try {
+            pages.get(pageNumber);
+            ChatComponentMessage message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&bTo view the next page, use /reports &c" +(pageNumber + 1)));
+
+            p.sendMessage(message.getComponent());
+
+        }catch(Exception ex){}
+    }
+
+    public void initializeCommands() {
+        getProxy().getPluginManager().registerCommand(this, new ReportCommand(this));
+        getProxy().getPluginManager().registerCommand(this,new TXTCmd(this));
+        getProxy().getPluginManager().registerCommand(this,new CmdCMD(this));
+        getProxy().getPluginManager().registerCommand(this,new ListReportsCMD(this));
+        getProxy().getPluginManager().registerCommand(this,new ReportPlusCommand(this));
+        getProxy().getPluginManager().registerCommand(this, new CloseReportCMD(this));
+        core.addCommand(new ReloadCommand(core));
+        core.addCommand(new AddAnnouncementCommand(core));
+        core.addCommand(new ListAnnouncementsCommand(core));
+        core.addCommand(new HelpCommand(core));
+        core.addCommand(new DelAnnouncementCommand(core));
+        core.addCommand(new CloseReportWithMessage(core));
+        if (this.getConfig().getSection("Cmds") != null) {
+            Collection<String> Cmds = this.getConfig().getSection("Cmds").getKeys();
+            for (String cmd : Cmds) {
+                core.addCommand(new CustomCMD(core, cmd));
+            }
+        }
+
+        if (this.getConfig().getSection("TXTCmds") != null) {
+            Collection<String> Cmds = this.getConfig().getSection("TXTCmds").getKeys();
+            for (String cmd : Cmds) {
+                core.addCommand(new CustomTXTCMD(core, cmd));
+
+            }
+        }
+
+
+    }
+
+    static <T> List<List<T>> chopped(List<T> list, final int L) {
+        List<List<T>> parts = new ArrayList<List<T>>();
+        final int N = list.size();
+        for (int i = 0; i < N; i += L) {
+            parts.add(new ArrayList<T>(
+                    list.subList(i, Math.min(N, i + L)))
+            );
+        }
+        return parts;
+    }
+
+    public void startAnnouncing() {
+        getProxy().getScheduler().schedule(this, new Runnable() {
+            @Override
+            public void run() {
+
+                Random random = new Random();
+                int index = random.nextInt(messagesList.size());
+                if (messagesList.get(index).equals(lastMessage))
+                    index = random.nextInt(messagesList.size());
+                lastMessage = messagesList.get(index);
+                core.getJda().getTextChannelById(main.getConfig().getString("Discord-Announcements-Channel-ID"))
+                        .sendMessage("```" + messagesList.get(index) + "```").queue();
+
+            }
+        },(long)this.getConfig().getInt("Interval"), TimeUnit.SECONDS);
+    }
+
+    public BungeeUtils getUtils() {
+        return utils;
+    }
+
+    public String getCMDChannelID() {
+        return CMDChannelID;
+    }
+
+    public void setReportsList(List<Report> newList){
+        reportsList = newList;
+    }
+
+    @Override
+    public void setGame(JDA jda) {
+        jda.getPresence().setGame(Game.playing(((String)ConfigurationManager.get("Game")).replace("%players%",  String.valueOf(getProxy().getOnlineCount()))));
+
+        if(getConfig().getBoolean("Auto-Refresh-Game")){
+            getProxy().getScheduler().schedule(this, new Runnable() {
+                @Override
+                public void run() {
+                    jda.getPresence().setGame(Game.playing(((String)ConfigurationManager.get("Game")).replace("%players%",  String.valueOf(getProxy().getOnlineCount()))));
+                }
+            }, 1L, 10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Override
+    public String getMCChannelID() {
+        return MCChannelID;
+    }
+
+    @Override
+    public String getMessage(String path) {
+        return utils.getMessagesConfig().getString(path);
+    }
+
+    @Override
+    public void broadcast(String message) {
+        getProxy().broadcast(new TextComponent(message));
+    }
+
+    @Override
+    public void broadcastTitle(String title, String subtitle, String permission) {
+        // Not implemented in Bungeecord.
+    }
+
+    @Override
+    public void broadcastNewReport(RPlayer player, String title, String subtitle, String reported, String message) {
+        for (ProxiedPlayer p : getProxy().getPlayers()) {
+            if (p.hasPermission("reportplus.receive")) {
+                for (String s : main.getUtils().getMessagesConfig().getStringList("Minecraft-Report-Format")) {
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', s.replace("%reporter%", player.getName()).replace("%reported%", reported).replace("%reportcontent%", message).replace("%server", getServerName(player)))));
+
+                }
+            }
+        }
+    }
+
+    @Override
+    public void dispatchCommand(String command) {
+        main.getProxy().getPluginManager().dispatchCommand(main.getProxy().getConsole(), command);
+    }
+
+    @Override
+    public void AddTextCMD(Object obj, String cmd, String text) {
+        CommandSender p = (CommandSender)obj;
+        main.getConfig().set("TXTCmds." + cmd + ".text", text);
+        main.getConfig().set("TXTCmds." + cmd + ".description", "My cmd! (Configure this in the config.yml)");
+        main.saveConfig();
+        main.reloadPluginConfig();
+
+        core.addCommand(new CustomTXTCMD(core, cmd));
+        p.sendMessage(new TextComponent(org.bukkit.ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!")));
+
+    }
+
+    @Override
+    public void AddCMDCMD(Object obj, String cmd, String cmdtobeexecuted) {
+        CommandSender p = (CommandSender)obj;
+
+        main.getConfig().set("Cmds." + cmd + ".targetcmd", cmdtobeexecuted);
+        main.getConfig().set("Cmds." + cmd + ".description", "My cmd! (Configure this in the config.yml)");
+        main.getConfig().set("Cmds." + cmd + ".say", "My cmd executed! (Configure this in the config.yml)");
+        main.saveConfig();
+        main.reloadPluginConfig();
+
+        core.addCommand(new CustomCMD(core, cmd));
+        p.sendMessage(new TextComponent(org.bukkit.ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!")));
+
+    }
+
+    @Override
+    public void log(String text) {
+        console.sendMessage(new TextComponent(Utils.CCT(text)));
+    }
+
+    @Override
+    public void addAnnouncement(String announcement) {
+        messagesList.add(announcement);
+        main.getConfig().set("Announcements", messagesList);
+        main.saveConfig();
+        main.reloadPluginConfig();
+    }
+
+    @Override
+    public List<Report> getReports() {
+        return reportsList;
+    }
+
+    @Override
+    public void closeReport(String name, Report report, boolean discord, String Message) {
+       closeReport(name, report, discord);
+
+        ProxiedPlayer reportOwner = getProxy().getPlayer(report.getReporter());
+        if(reportOwner != null){
+            reportOwner.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Message-Notification-Format").replace("%sender%", name).replace("%message%", Message))));
+        }else{
+
+            List<String> messages = new ArrayList<>();
+
+            if(main.getConfig().contains("User-Notifications." + report.getReporter()))
+                messages = main.getConfig().getStringList("User-Notifications." + report.getReporter());
+            messages.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Message-Notification-Format").replace("%sender%", name).replace("%message%", Message)));
+            main.getConfig().set("User-Notifications." +report.getReporter(), messages);
+            main.saveConfig();
+        }
+    }
+
+    public void closeReport(String closer, Report r, boolean discord){
+
+        if(getProxy().getPlayer(r.getReporter()) != null)
+            getProxy().getPlayer(r.getReporter()).sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId())))));
+        else {
+            if(main.getConfig().getStringList("User-Notifications." +r.getReporter()) != null){
+                List<String> notifications = main.getConfig().getStringList("User-Notifications." + r.getReporter());
+                notifications.add(ChatColor.translateAlternateColorCodes('&', main.getUtils().getMessagesConfig().getString("Report-Closed-Message").replace("%id%", String.valueOf(r.getReportId()))));
+                main.getConfig().set("User-Notifications." + r.getReporter(), notifications);
+                main.saveConfig();
+                main.reloadPluginConfig();
+            }
+        }
+        for (ProxiedPlayer p : main.getProxy().getPlayers()) {
+            if (p.hasPermission("reportplus.receive")) {
+                if (p.hasPermission("reportplus.receive")) {
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', "&8&m          I         ")));
+                    p.sendMessage(new TextComponent(""));
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', "          &6&lReport &c&lClosed!         ")));
+                    p.sendMessage(new TextComponent(""));
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', "          &6Closer: &c" +closer + "          ")));
+                    p.sendMessage(new TextComponent(""));
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', "          &6Report ID: &c" + r.getReportId() + "          ")));
+                    p.sendMessage(new TextComponent(""));
+                    p.sendMessage(new TextComponent(
+                            ChatColor.translateAlternateColorCodes('&', "          &6Report reason: &c" + r.getReportContent() + "          ")));
+                    p.sendMessage(new TextComponent(""));
+                    p.sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', "&8&m          I         ")));
+                }
+            }
+        }
+        reportsList.remove(r);
+        if(main.getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
+            main.getSqlManager().removeReportFromDatabase(r);
+        else {
+            main.getUtils().getReportsConfig().set("Reports.Report" + r.getReportId(), null);
+
+            getProxy().getScheduler().schedule(main, new Runnable() {
+                @Override
+                public void run() {
+                    main.getUtils().saveReportsToConfig();
+                }
+            }, 2, TimeUnit.SECONDS);
+        }
+    }
+
+    @Override
+    public List<String> getMessages() {
         return null;
     }
 
-    public void initConfig(){
-        getValue("Enabled-Modules.Console", true);
-        getValue("Enabled-Modules.Chat-Sync", true);
-
-        getValue("Discord-Bot-Token", "[INSERT TOKEN HERE]");
-        getValue("Change-Game", true);
-        getValue("Auto-Refresh-Game", true);
-        getValue("Refresh-Interval", 10);
-        getValue("Game", "%players% are currently online");
-        getValue("Console-Channel-ID", "[INSERT ID HERE]");
-        getValue("Chat-Sync-Channel-ID", "[INSERT ID HERE]");
-        getValue("Chat-Sync-Format", "%player% -> %message%");
-        getValue("Discord-Chat-Sync-Format", "&b[Discord] &c%user% -> %message%");
+    @Override
+    public void deleteAnnouncement(int id) {
+        main.getMessages().remove(id - 1);
+        main.getConfig().set("Announcements", main.getMessages());
+        main.saveConfig();
+        main.reloadPluginConfig();
     }
 
-	public static ReportPlusBungeeAPI getAPI(){
-	    return api;
-    }
-	public void sendMessage(String message, ServerInfo server, DataMessageType type) {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(stream);
-        try {
-			out.writeUTF(type.toString());
-			out.writeUTF(message);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-        server.sendData("reportplus:rs", stream.toByteArray());
-    }
-
-    public void sendMessage(Punishment message, ServerInfo server, DataMessageType type) {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(stream);
-        try {
-            out.writeUTF(type.toString());
-            out.writeUTF(server.getName());
-            out.writeUTF(message.getPunished());
-            out.writeUTF(message.getPunisher());
-            out.writeUTF(message.getReason());
-            out.writeUTF(message.getType().toString());
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        System.out.println("Sent punishment. ");
-        this.getProxy().getPlayer(message.getPunisher()).getServer().sendData("reportplus:rs", stream.toByteArray());
-    }
-
-    @EventHandler
-    public void onPluginMessage(PluginMessageEvent ev) {
-        if (!ev.getTag().equals("reportplus:rs")) {
-            return;
+    @Override
+    public void addCustomCommandsToEmbed(EmbedBuilder builder) {
+        if (main.getConfig().getSection("TXTCmds") != null) {
+            Collection<String> Cmds = main.getConfig().getSection("TXTCmds").getKeys();
+            for(String cmd : Cmds){
+                builder.addField("**" + cmd + "**", main.getConfig().getString("TXTCmds." + cmd + ".description"), false);
+            }
         }
 
-        if (!(ev.getSender() instanceof Server)) {
-            return;
+        if (main.getConfig().getSection("Cmds") != null) {
+            Collection<String> Cmds = main.getConfig().getSection("Cmds").getKeys();
+            for (String cmd : Cmds) {
+                builder.addField("**" + cmd + "**", main.getConfig().getString("Cmds." + cmd + ".description"), false);
+
+            }
         }
-
-        ByteArrayInputStream stream = new ByteArrayInputStream(ev.getData());
-        DataInputStream in = new DataInputStream(stream);
-        try {
-			DataMessageType type = DataMessageType.valueOf(in.readUTF());
-			if(type == DataMessageType.REPORT) {
-				String reporter = in.readUTF();
-				String reported = in.readUTF();
-				String report = in.readUTF();
-				ProxiedPlayer p = getProxy().getPlayer(reporter);
-				ServerInfo serverName = p.getServer().getInfo();
-				sendReport(reporter, reported, report, serverName);
-				System.out.println("Received a report!");
-			} else if(type == DataMessageType.LOG){
-				String closer = in.readUTF();
-				boolean discord = Boolean.valueOf(in.readUTF());
-				String id = in.readUTF();
-				ServerInfo server;
-				if(!discord)
-				    server = getProxy().getPlayer(closer).getServer().getInfo();
-				else
-                    server =  ProxyServer.getInstance().constructServerInfo("Discord", InetSocketAddress.createUnresolved("127.0.0.1", 25565), "Discord", false);
-
-                String content = in.readUTF();
-				sendLog(closer,id,content,server);
-			}
-
-
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
     }
 
-    public TextComponent getTextComponent(String msg, ServerInfo server) {
-		TextComponent message = new TextComponent(ChatColor.translateAlternateColorCodes('&', msg));
-		message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("Click to go there!").create() ));
-		message.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/server " + server.getName()));
-		return message;
+    @Override
+    public void reloadPluginConfig() {
+        initConfig();
     }
 
-    public static Object getKeyFromValue(Map hm, Object value) {
-        for (Object o : hm.keySet()) {
-          if (hm.get(o).equals(value)) {
-            return o;
-          }
-        }
-        return null;
-      }
+    @Override
+    public boolean isOnline(UUID uuid) {
+        return getProxy().getPlayer(uuid) != null;
+    }
 
-      public void sendLog(String closer, String id, String content, ServerInfo serverName){
-		  Map<String, ServerInfo> servers = getProxy().getServers();
-		  servers.remove(getKeyFromValue(servers, serverName));
-		  for(Entry<String, ServerInfo> server : servers.entrySet()) {
-			  ServerInfo serverInfo = server.getValue();
-			  for(ProxiedPlayer p : serverInfo.getPlayers()) {
-				  if (p.hasPermission("reportplus.receive") ) {
-					  p.sendMessage(getTextComponent("&8&m          I         ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("          &6&lReport &c&lClosed!         ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("          &6Closer: &c" + closer + "          ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("          &6Report ID: &c" + id + "          ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("          &6Report Reason: &c" + content + "          ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("          &6Server: &c" + serverName.getName() + "          ", serverName));
-					  p.sendMessage(getTextComponent("", serverName));
-					  p.sendMessage(getTextComponent("&8&m          I         ", serverName));
-				  }
-			  }
-		  }
-	  }
+    @Override
+    public String getReportsChannelID() {
+        return reportChannelID ;
+    }
 
-    public void sendReport(String reporter, String reported, String report, ServerInfo serverName) {
-    	Map<String, ServerInfo> servers = getProxy().getServers();
-    	servers.remove(getKeyFromValue(servers, serverName));
-    	for(Entry<String, ServerInfo> server : servers.entrySet()) {
-    		ServerInfo serverInfo = server.getValue();
-    		for(ProxiedPlayer p : serverInfo.getPlayers()) {
-    			if (p.hasPermission("reportplus.receive")) {
-    				p.sendMessage(getTextComponent("&8&m          I         ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("          &6&lNew &c&lReport!         ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("          &6Reporter: &c" + reporter + "          ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("          &6Reported: &c" + reported + "          ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("          &6Reason: &c" + report + "          ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("          &6Server: &c" + serverName.getName() + "          ", serverName));
-    				p.sendMessage(getTextComponent("", serverName));
-    				p.sendMessage(getTextComponent("&8&m          I         ", serverName));
+    @Override
+    public String getServerName(RPlayer p) {
+        return getProxy().getPlayer(p.getUniqueId()).getServer().getInfo().getName();
+    }
 
-    			}
-    		}
-    	}
+    @Override
+    public void sendMessage(UUID uuid, String message) {
+        getProxy().getPlayer(uuid).sendMessage(new TextComponent(ChatColor.translateAlternateColorCodes('&', message)));
+    }
+
+    @Override
+    public String getPrefix() {
+        return prefix;
+    }
+
+    @Override
+    public MySQLManager getSqlManager() {
+        return sqlManager;
+    }
+
+    @Override
+    public void saveReportsToConfig() {
+utils.saveReportsToConfig();
+    }
+
+    @Override
+    public Object getPlayer(UUID uuid) {
+        return getProxy().getPlayer(uuid);
+    }
+
+    @Override
+    public void callEvent(Object event) {
+        Event e = (Event)event;
+        getProxy().getPluginManager().callEvent(e);
+    }
+
+    @Override
+    public void sendConsole(String message){
+        console.sendMessage(new TextComponent(message));
     }
 }

@@ -1,8 +1,8 @@
 package me.xbones.reportplus.spigot.inventories;
 
-import me.xbones.reportplus.spigot.Report;
+import me.xbones.reportplus.core.Report;
+import me.xbones.reportplus.core.ReportType;
 import me.xbones.reportplus.spigot.ReportPlus;
-import me.xbones.reportplus.spigot.ReportType;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;

@@ -1,38 +1,37 @@
 package me.xbones.reportplus.spigot.commands;
 
 
+import me.xbones.reportplus.core.chatcomponentapi.ChatComponentMessage;
 import me.xbones.reportplus.spigot.ReportPlus;
-import me.xbones.reportplus.spigot.chatcomponentapi.ChatComponentMessage;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 
 public class ReportPlusCommand implements CommandExecutor {
-	private ReportPlus main;
+    private ReportPlus main;
 
-	public ReportPlusCommand(ReportPlus main) {
-		this.main = main;
-	}
+    public ReportPlusCommand(ReportPlus main) {
+        this.main = main;
+    }
 
-	@Override
-	public boolean onCommand(CommandSender sender, Command name, String label, String[] args) {
-		if(sender.hasPermission("reportplus.report"))
-		if(args.length == 0) {
-			ChatComponentMessage message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cReportPlus &6by &aBonesJones"));
-			message.addHover(ChatColor.translateAlternateColorCodes('&', "&cVersion: &6" + main.getDescription().getVersion()));
-			sender.spigot().sendMessage(message.getComponent());
+    @Override
+    public boolean onCommand(CommandSender sender, Command name, String label, String[] args) {
+        if (args.length == 0) {
+            ChatComponentMessage message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cReportPlus &6by &aBonesJones"));
+            message.addHover(ChatColor.translateAlternateColorCodes('&', "&cVersion: &6" + main.getDescription().getVersion()));
+            sender.spigot().sendMessage(message.getComponent());
 
-			message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cCommands:"));
-			message.addHover(ChatColor.translateAlternateColorCodes('&', "&7Here are the commands with description"));
-			sender.spigot().sendMessage(message.getComponent());
+            message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &cCommands:"));
+            message.addHover(ChatColor.translateAlternateColorCodes('&', "&7Here are the commands with description"));
+            sender.spigot().sendMessage(message.getComponent());
 
-			message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &c/reload &7(Hover for information)"));
-			message.addHover(ChatColor.translateAlternateColorCodes('&', "&7Reload the plugin & reports"));
-			sender.spigot().sendMessage(message.getComponent());
+            message = new ChatComponentMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &c/reload &7(Hover for information)"));
+            message.addHover(ChatColor.translateAlternateColorCodes('&', "&7Reload the plugin & reports"));
+            sender.spigot().sendMessage(message.getComponent());
 
-		}else{
-			if(args.length >= 1){/*
+        } else {
+            if (args.length >= 1) {/*
 				if(args[0].equalsIgnoreCase("report")){
 				    if(args.length == 1){
 				        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + "&cPlease enter a bug to report!"));
@@ -58,13 +57,21 @@ public class ReportPlusCommand implements CommandExecutor {
 							);
 					sender.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aSuccess!"));
 
-				} */ if(args[0].equalsIgnoreCase("reload")){
-					main.reloadConfig();
-					main.getSqlManager().refresh();
-					sender.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aPlugin reloaded!"));
-				}
-			}
-		}
-		return true;
-	}
+				} */
+                if (args[0].equalsIgnoreCase("reload")) {
+                    if (sender.hasPermission("reportplus.reload")) {
+                        main.reloadPluginConfig();
+                        if (main.getConfig().getBoolean("Enabled-Modules.MySQL.Enabled"))
+                            main.setReportsList(main.getSqlManager().getReports());
+                        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', main.getPrefix() + " &aPlugin reloaded!"));
+                    } else {
+                        sender.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                            main.getPrefix() + " " + main.getUtils().getMessagesConfig().getString("No-Permission")));
+
+                    }
+                }
+            }
+        }
+        return true;
+    }
 }
